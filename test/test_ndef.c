@@ -277,6 +277,76 @@ void test_roundtrip_multiple_variable_length(void)
     TEST_ASSERT_EQUAL_MEMORY(p4, parsed[4].payload, sizeof(p4));
 }
 
+/* --------------------------------------------------------- malformed / error paths */
+
+void test_parse_null_buf(void)
+{
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM, ndef_parse(NULL, 10, &rec, 1));
+}
+
+void test_parse_null_records(void)
+{
+    static const uint8_t buf[] = { 0xD1, 0x01, 0x01, 'T', 'X' };
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM, ndef_parse(buf, sizeof(buf), NULL, 1));
+}
+
+void test_parse_missing_mb_flag(void)
+{
+    /* Header byte has ME set but not MB — invalid for first record */
+    static const uint8_t buf[] = { 0x51, 0x01, 0x01, 'T', 'X' };
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_parse(buf, sizeof(buf), &rec, 1));
+}
+
+void test_parse_truncated_at_type_length(void)
+{
+    /* Header only — buffer ends before type length byte */
+    static const uint8_t buf[] = { 0xD1 };
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_parse(buf, sizeof(buf), &rec, 1));
+}
+
+void test_parse_truncated_payload(void)
+{
+    /* Header claims 10-byte payload but only 2 bytes follow the type */
+    static const uint8_t buf[] = { 0xD1, 0x01, 0x0A, 'T', 0x11, 0x22 };
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_parse(buf, sizeof(buf), &rec, 1));
+}
+
+void test_parse_truncated_long_payload_length(void)
+{
+    /* SR=0: 4-byte payload length field, but buffer cuts off after 2 bytes of it */
+    static const uint8_t buf[] = { 0xC1, 0x01, 0x00, 0x00 };
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_parse(buf, sizeof(buf), &rec, 1));
+}
+
+void test_parse_truncated_type_field(void)
+{
+    /* type_len=3 but only 1 byte of type data present */
+    static const uint8_t buf[] = { 0xD1, 0x03, 0x01, 'T' };
+    ndef_record_t rec;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_parse(buf, sizeof(buf), &rec, 1));
+}
+
+void test_build_null_records(void)
+{
+    uint8_t out[32];
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM, ndef_build(NULL, 1, out, sizeof(out)));
+}
+
+void test_build_buffer_too_small(void)
+{
+    static const uint8_t type_t = 'T';
+    static const uint8_t pay[]  = { 0x02, 'e', 'n', 'X' };
+    ndef_record_t rec;
+    uint8_t       out[2];   /* far too small */
+    make_record(&rec, NDEF_TNF_WELL_KNOWN, &type_t, 1, pay, sizeof(pay));
+    TEST_ASSERT_EQUAL(NDEF_ERR_OVERFLOW, ndef_build(&rec, 1, out, sizeof(out)));
+}
+
 /* --------------------------------------------------------------------- main */
 
 int main(void)
@@ -298,6 +368,16 @@ int main(void)
     RUN_TEST(test_single_byte_payload);
 
     RUN_TEST(test_roundtrip_multiple_variable_length);
+
+    RUN_TEST(test_parse_null_buf);
+    RUN_TEST(test_parse_null_records);
+    RUN_TEST(test_parse_missing_mb_flag);
+    RUN_TEST(test_parse_truncated_at_type_length);
+    RUN_TEST(test_parse_truncated_payload);
+    RUN_TEST(test_parse_truncated_long_payload_length);
+    RUN_TEST(test_parse_truncated_type_field);
+    RUN_TEST(test_build_null_records);
+    RUN_TEST(test_build_buffer_too_small);
 
     return UNITY_END();
 }

@@ -119,6 +119,55 @@ void test_tlv_then_ndef_roundtrip(void)
     TEST_ASSERT_EQUAL_MEMORY(pay, parsed.payload, sizeof(pay));
 }
 
+/* --------------------------------------------------------- malformed / error paths */
+
+void test_tlv_unwrap_null_buf(void)
+{
+    const uint8_t *msg = NULL;
+    uint16_t       len = 0;
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM, ndef_tlv_unwrap(NULL, 10, &msg, &len));
+}
+
+void test_tlv_unwrap_only_terminator(void)
+{
+    /* A buffer containing only the terminator — no NDEF TLV present */
+    static const uint8_t buf[] = { NDEF_TLV_TERMINATOR };
+    const uint8_t *msg = NULL;
+    uint16_t       len = 0;
+    TEST_ASSERT_EQUAL(NDEF_ERR_NO_RECORDS, ndef_tlv_unwrap(buf, sizeof(buf), &msg, &len));
+}
+
+void test_tlv_unwrap_truncated_value(void)
+{
+    /* Length byte says 10 bytes follow, but buffer ends after 3 */
+    static const uint8_t buf[] = { NDEF_TLV_NDEF, 0x0A, 0x01, 0x02, 0x03 };
+    const uint8_t *msg = NULL;
+    uint16_t       len = 0;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_tlv_unwrap(buf, sizeof(buf), &msg, &len));
+}
+
+void test_tlv_unwrap_long_form_truncated_length(void)
+{
+    /* 0xFF marker present but only 1 byte of the 2-byte length follows */
+    static const uint8_t buf[] = { NDEF_TLV_NDEF, NDEF_TLV_LONG_FORM, 0x01 };
+    const uint8_t *msg = NULL;
+    uint16_t       len = 0;
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED, ndef_tlv_unwrap(buf, sizeof(buf), &msg, &len));
+}
+
+void test_tlv_wrap_buffer_too_small(void)
+{
+    static const uint8_t msg[] = { 0x01, 0x02, 0x03 };
+    uint8_t out[2];  /* too small for tag + length + value + terminator */
+    TEST_ASSERT_EQUAL(NDEF_ERR_OVERFLOW, ndef_tlv_wrap(msg, sizeof(msg), out, sizeof(out)));
+}
+
+void test_tlv_wrap_null_msg(void)
+{
+    uint8_t out[16];
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM, ndef_tlv_wrap(NULL, 4, out, sizeof(out)));
+}
+
 /* --------------------------------------------------------------------- main */
 
 int main(void)
@@ -131,6 +180,13 @@ int main(void)
     RUN_TEST(test_tlv_unwrap_long_length);
     RUN_TEST(test_tlv_roundtrip);
     RUN_TEST(test_tlv_then_ndef_roundtrip);
+
+    RUN_TEST(test_tlv_unwrap_null_buf);
+    RUN_TEST(test_tlv_unwrap_only_terminator);
+    RUN_TEST(test_tlv_unwrap_truncated_value);
+    RUN_TEST(test_tlv_unwrap_long_form_truncated_length);
+    RUN_TEST(test_tlv_wrap_buffer_too_small);
+    RUN_TEST(test_tlv_wrap_null_msg);
 
     return UNITY_END();
 }

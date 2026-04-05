@@ -163,6 +163,69 @@ void test_multi_record_json_tlv_roundtrip(void)
     }
 }
 
+/* --------------------------------------------------------- malformed / error paths */
+
+void test_decode_empty_payload(void)
+{
+    static const uint8_t payload[] = { 0x00 };
+    char lang[8], text[32];
+    /* payload_len=0 → NDEF_ERR_PARAM */
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM,
+        ndef_text_decode(payload, 0, lang, sizeof(lang), text, sizeof(text)));
+}
+
+void test_decode_lang_overruns_payload(void)
+{
+    /* Status byte claims lang_len=5 but only 3 bytes total in payload */
+    static const uint8_t payload[] = { 0x05, 'e', 'n' };
+    char lang[8], text[32];
+    TEST_ASSERT_EQUAL(NDEF_ERR_MALFORMED,
+        ndef_text_decode(payload, sizeof(payload), lang, sizeof(lang), text, sizeof(text)));
+}
+
+void test_decode_lang_buf_too_small(void)
+{
+    uint8_t payload[32];
+    int enc = ndef_text_encode("en", "hello", payload, sizeof(payload));
+    TEST_ASSERT_GREATER_THAN(0, enc);
+
+    char lang[1];   /* too small for "en\0" */
+    char text[32];
+    TEST_ASSERT_EQUAL(NDEF_ERR_OVERFLOW,
+        ndef_text_decode(payload, (uint32_t)enc, lang, sizeof(lang), text, sizeof(text)));
+}
+
+void test_decode_text_buf_too_small(void)
+{
+    uint8_t payload[32];
+    int enc = ndef_text_encode("en", "hello world", payload, sizeof(payload));
+    TEST_ASSERT_GREATER_THAN(0, enc);
+
+    char lang[8];
+    char text[4];   /* too small for "hello world\0" */
+    TEST_ASSERT_EQUAL(NDEF_ERR_OVERFLOW,
+        ndef_text_decode(payload, (uint32_t)enc, lang, sizeof(lang), text, sizeof(text)));
+}
+
+void test_encode_lang_too_long(void)
+{
+    /* lang longer than NDEF_TEXT_LANG_MAX */
+    char lang[NDEF_TEXT_LANG_MAX + 2];
+    memset(lang, 'x', sizeof(lang) - 1);
+    lang[sizeof(lang) - 1] = '\0';
+
+    uint8_t buf[64];
+    TEST_ASSERT_EQUAL(NDEF_ERR_PARAM,
+        ndef_text_encode(lang, "text", buf, sizeof(buf)));
+}
+
+void test_encode_buffer_too_small(void)
+{
+    uint8_t buf[4];  /* too small for status + "en" + "hello" */
+    TEST_ASSERT_EQUAL(NDEF_ERR_OVERFLOW,
+        ndef_text_encode("en", "hello", buf, sizeof(buf)));
+}
+
 /* --------------------------------------------------------------------- main */
 
 int main(void)
@@ -176,6 +239,13 @@ int main(void)
     RUN_TEST(test_text_record_helper);
     RUN_TEST(test_multi_record_text_json);
     RUN_TEST(test_multi_record_json_tlv_roundtrip);
+
+    RUN_TEST(test_decode_empty_payload);
+    RUN_TEST(test_decode_lang_overruns_payload);
+    RUN_TEST(test_decode_lang_buf_too_small);
+    RUN_TEST(test_decode_text_buf_too_small);
+    RUN_TEST(test_encode_lang_too_long);
+    RUN_TEST(test_encode_buffer_too_small);
 
     return UNITY_END();
 }
