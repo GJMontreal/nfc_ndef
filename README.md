@@ -83,6 +83,33 @@ for (int i = 0; i < n; i++) {
 }
 ```
 
+## dump_parse
+
+`tools/dump_parse.c` is a host-side utility that reads a raw EEPROM dump (binary file) and prints the Capability Container details and all parsed NDEF records to stdout. Useful for inspecting dumps captured from a real device.
+
+```sh
+./build/dump_parse <file.bin>
+```
+
+An example dump from a real ST25DV16K is included:
+
+```sh
+./build/dump_parse examples/st25dv_single_text_record.bin
+```
+
+```
+CC: magic=0xE2  ver=0x40  MLEN=0xFF (2048 bytes)  access=0x01
+
+NDEF message: 26 bytes
+
+1 record(s) found:
+
+  [0] TNF=0x1  type="T" (1 byte)  payload=22 bytes
+       lang="en"  text={"pattern":"chase"}
+```
+
+The tool is built automatically alongside the tests when you run `cmake --build build`.
+
 ## Building and running tests
 
 Tests run natively on the host. The [Unity Test Project](https://github.com/ThrowTheSwitch/Unity) is fetched automatically by CMake on first configure.
