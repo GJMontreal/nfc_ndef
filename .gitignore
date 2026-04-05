@@ -6,3 +6,4 @@ test_ndef_text
 test_st25dv
 dump_parse
 .claude/
+test/unity/
