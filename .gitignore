@@ -1,0 +1,8 @@
+build/
+*.o
+test_ndef
+test_ndef_tlv
+test_ndef_text
+test_st25dv
+dump_parse
+.claude/
